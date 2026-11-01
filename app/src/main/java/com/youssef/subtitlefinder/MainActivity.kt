@@ -8,12 +8,15 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import androidx.documentfile.provider.DocumentFile
 import org.json.JSONObject
 import java.io.BufferedInputStream
@@ -26,18 +29,25 @@ import java.util.Locale
 import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val executor = Executors.newSingleThreadExecutor()
+
     private lateinit var apiKeyInput: EditText
     private lateinit var folderLabel: TextView
     private lateinit var logView: TextView
+
     private var selectedTree: Uri? = null
+    private var selectedLanguage = "BOTH"
+    private var searchMode = "AUTO"
+
     private val prefs by lazy {
         getSharedPreferences("subtitle_finder", MODE_PRIVATE)
     }
 
     companion object {
         private const val PICK_FOLDER = 101
+
         private val VIDEO_EXTENSIONS = setOf(
             "mkv", "mp4", "avi", "mov", "wmv",
             "m4v", "webm", "mpg", "mpeg", "ts"
@@ -60,7 +70,7 @@ class MainActivity : Activity() {
         root.addView(title, matchWidth())
 
         val description = TextView(this).apply {
-            text = "Find and download Arabic + English subtitles beside your video files."
+            text = "Find and download subtitles beside your video files."
             textSize = 14f
             setPadding(0, 12, 0, 18)
         }
@@ -72,6 +82,31 @@ class MainActivity : Activity() {
             setText(prefs.getString("api_key", ""))
         }
         root.addView(apiKeyInput, matchWidth())
+
+        addChoiceGroup(
+            root,
+            "Subtitle language",
+            listOf(
+                "English" to "EN",
+                "العربية" to "AR",
+                "Both" to "BOTH"
+            ),
+            selectedLanguage
+        ) {
+            selectedLanguage = it
+        }
+
+        addChoiceGroup(
+            root,
+            "Search mode",
+            listOf(
+                "Automatic" to "AUTO",
+                "Manual" to "MANUAL"
+            ),
+            searchMode
+        ) {
+            searchMode = it
+        }
 
         val chooseButton = Button(this).apply {
             text = "1. Choose movies / series folder"
@@ -107,6 +142,7 @@ class MainActivity : Activity() {
 
         val scroll = ScrollView(this)
         scroll.addView(logView)
+
         root.addView(
             scroll,
             LinearLayout.LayoutParams(
@@ -118,10 +154,57 @@ class MainActivity : Activity() {
 
         setContentView(root)
 
-        selectedTree = savedInstanceState?.getString("tree")?.let(Uri::parse)
+        selectedTree = savedInstanceState
+            ?.getString("tree")
+            ?.let(Uri::parse)
+
         if (selectedTree != null) {
             folderLabel.text = "Folder selected"
         }
+    }
+
+    private fun addChoiceGroup(
+        root: LinearLayout,
+        heading: String,
+        options: List<Pair<String, String>>,
+        defaultValue: String,
+        onChanged: (String) -> Unit
+    ) {
+        root.addView(TextView(this).apply {
+            text = heading
+            textSize = 15f
+            setPadding(0, 12, 0, 4)
+        }, matchWidth())
+
+        val group = RadioGroup(this).apply {
+            orientation = RadioGroup.HORIZONTAL
+        }
+
+        var defaultId = View.NO_ID
+
+        options.forEach { option ->
+            val radio = RadioButton(this).apply {
+                text = option.first
+                id = View.generateViewId()
+                tag = option.second
+            }
+
+            group.addView(radio)
+
+            if (option.second == defaultValue) {
+                defaultId = radio.id
+            }
+        }
+
+        group.setOnCheckedChangeListener { g, id ->
+            g.findViewById<RadioButton>(id)
+                ?.tag?.toString()
+                ?.let(onChanged)
+        }
+
+        group.check(defaultId)
+
+        root.addView(group, matchWidth())
     }
 
     private fun matchWidth() = LinearLayout.LayoutParams(
@@ -131,11 +214,13 @@ class MainActivity : Activity() {
 
     private fun chooseFolder() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+
         intent.addFlags(
             Intent.FLAG_GRANT_READ_URI_PERMISSION or
             Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
             Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
         )
+
         startActivityForResult(intent, PICK_FOLDER)
     }
 
@@ -148,6 +233,7 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
 
         if (requestCode == PICK_FOLDER && resultCode == RESULT_OK) {
+
             val uri = data?.data ?: return
 
             val flags = data.flags and (
@@ -156,6 +242,7 @@ class MainActivity : Activity() {
             )
 
             contentResolver.takePersistableUriPermission(uri, flags)
+
             selectedTree = uri
 
             folderLabel.text =
@@ -166,6 +253,7 @@ class MainActivity : Activity() {
     }
 
     private fun startScan() {
+
         val key = apiKeyInput.text.toString().trim()
         val tree = selectedTree
 
@@ -180,14 +268,19 @@ class MainActivity : Activity() {
         }
 
         prefs.edit().putString("api_key", key).apply()
+
         appendLog("Starting scan...")
+        appendLog("Language: $selectedLanguage")
+        appendLog("Mode: $searchMode")
 
         executor.execute {
             try {
+
                 val directory = DocumentFile.fromTreeUri(this, tree)
                     ?: throw IllegalStateException("Cannot open selected folder.")
 
                 val videos = mutableListOf<DocumentFile>()
+
                 collectVideos(directory, videos)
 
                 postLog("Found ${videos.size} video file(s).")
@@ -198,6 +291,7 @@ class MainActivity : Activity() {
                 }
 
                 videos.forEachIndexed { index, video ->
+
                     postLog("\n[${index + 1}/${videos.size}] ${video.name}")
 
                     try {
@@ -222,9 +316,11 @@ class MainActivity : Activity() {
         output: MutableList<DocumentFile>
     ) {
         folder.listFiles().forEach { item ->
+
             if (item.isDirectory) {
                 collectVideos(item, output)
             } else {
+
                 val ext = item.name
                     ?.substringAfterLast('.', "")
                     ?.lowercase(Locale.ROOT)
@@ -245,6 +341,7 @@ class MainActivity : Activity() {
     )
 
     private fun identify(name: String): VideoInfo {
+
         val base = name.substringBeforeLast('.', name)
 
         val se = Regex(
@@ -305,7 +402,11 @@ class MainActivity : Activity() {
         )
     }
 
-    private fun processVideo(video: DocumentFile, apiKey: String) {
+    private fun processVideo(
+        video: DocumentFile,
+        apiKey: String
+    ) {
+
         val videoName = video.name ?: return
         val info = identify(videoName)
 
@@ -314,11 +415,17 @@ class MainActivity : Activity() {
             if (info.isTv) " S${info.season}E${info.episode}" else ""
         )
 
+        val requestedLanguages = when (selectedLanguage) {
+            "AR" -> "AR"
+            "EN" -> "EN"
+            else -> "AR,EN"
+        }
+
         val params = linkedMapOf(
             "api_key" to apiKey,
             "file_name" to videoName,
             "film_name" to info.title,
-            "languages" to "AR,EN",
+            "languages" to requestedLanguages,
             "subs_per_page" to "30",
             "unpack" to "1",
             "client" to "other"
@@ -360,10 +467,12 @@ class MainActivity : Activity() {
         val candidates = mutableListOf<JSONObject>()
 
         for (i in 0 until subs.length()) {
+
             val sub = subs.optJSONObject(i) ?: continue
             val unpacked = sub.optJSONArray("unpack_files") ?: continue
 
             for (j in 0 until unpacked.length()) {
+
                 val item = unpacked.optJSONObject(j) ?: continue
 
                 val lang = item.optString(
@@ -372,6 +481,7 @@ class MainActivity : Activity() {
                 ).uppercase(Locale.ROOT)
 
                 if (lang == "AR" || lang == "EN") {
+
                     if (!info.isTv || episodeMatches(item, info)) {
                         candidates.add(item)
                     }
@@ -386,7 +496,13 @@ class MainActivity : Activity() {
 
         val base = videoName.substringBeforeLast('.', videoName)
 
-        listOf("AR", "EN").forEach { lang ->
+        val languagesToDownload = when (selectedLanguage) {
+            "AR" -> listOf("AR")
+            "EN" -> listOf("EN")
+            else -> listOf("AR", "EN")
+        }
+
+        languagesToDownload.forEach { lang ->
 
             val best = candidates.firstOrNull {
                 it.optString(
@@ -401,6 +517,7 @@ class MainActivity : Activity() {
             }
 
             val urlPath = best.optString("url")
+
             val format = best.optString("format", "srt")
                 .lowercase(Locale.ROOT)
 
@@ -413,7 +530,12 @@ class MainActivity : Activity() {
                 format in setOf("srt", "ass", "ssa", "sub", "vtt")
             ) format else "srt"
 
-            val suffix = if (lang == "AR") ".ar.$safeExt" else ".en.$safeExt"
+            val suffix = if (lang == "AR") {
+                ".ar.$safeExt"
+            } else {
+                ".en.$safeExt"
+            }
+
             val targetName = base + suffix
 
             val parent = video.parentFile
@@ -454,6 +576,7 @@ class MainActivity : Activity() {
         item: JSONObject,
         info: VideoInfo
     ): Boolean {
+
         val season = item.optInt("season", -1)
         val episode = item.optInt("episode", -1)
 
@@ -465,6 +588,7 @@ class MainActivity : Activity() {
         URLEncoder.encode(value, "UTF-8")
 
     private fun httpGet(address: String): String {
+
         val connection =
             (URL(address).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
@@ -474,6 +598,7 @@ class MainActivity : Activity() {
             }
 
         try {
+
             val code = connection.responseCode
 
             val stream = if (code in 200..299) {
@@ -491,12 +616,14 @@ class MainActivity : Activity() {
             }
 
             return body
+
         } finally {
             connection.disconnect()
         }
     }
 
     private fun httpBytes(address: String): ByteArray {
+
         val connection =
             (URL(address).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 20000
@@ -508,6 +635,7 @@ class MainActivity : Activity() {
             }
 
         try {
+
             val code = connection.responseCode
 
             if (code !in 200..299) {
@@ -536,9 +664,11 @@ class MainActivity : Activity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+
         selectedTree?.let {
             outState.putString("tree", it.toString())
         }
+
         super.onSaveInstanceState(outState)
     }
 
@@ -547,4 +677,3 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 }
- 
