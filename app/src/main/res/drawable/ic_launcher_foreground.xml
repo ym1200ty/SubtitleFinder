@@ -1,0 +1,57 @@
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Subtitle Bubble -->
+    <path
+        android:pathData="M23,23
+        C23,17 28,13 34,13
+        H74
+        C80,13 85,18 85,24
+        V59
+        C85,65 80,70 74,70
+        H49
+        L32,84
+        V70
+        H34
+        C28,70 23,65 23,59
+        Z"
+        android:fillColor="#151520"
+        android:strokeColor="#A855F7"
+        android:strokeWidth="3.5"/>
+
+    <!-- Subtitle Lines -->
+    <path
+        android:pathData="M36,34 H70"
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"/>
+
+    <path
+        android:pathData="M36,47 H62"
+        android:strokeColor="#A855F7"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"/>
+
+    <!-- Search Magnifier -->
+    <path
+        android:pathData="M68,65
+        C68,54 76,46 86,46
+        C96,46 102,54 102,64
+        C102,74 94,82 84,82
+        C75,82 68,74 68,65 Z"
+        android:fillColor="#0A0A0F"
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="3.5"/>
+
+    <!-- Magnifier Handle -->
+    <path
+        android:pathData="M94,77 L102,87"
+        android:strokeColor="#A855F7"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"/>
+
+</vector>
